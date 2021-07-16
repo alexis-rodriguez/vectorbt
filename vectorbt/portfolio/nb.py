@@ -933,6 +933,8 @@ def approx_order_value_nb(size: float,
         return size - asset_value_now
     if size_type == SizeType.TargetPercent:
         return size * value_now - asset_value_now
+        # size = size * value_now - asset_value_now
+        # return size * np.sign(asset_value_now)
     return np.nan
 
 

@@ -214,6 +214,8 @@ class ScheduleManager:
             job = getattr(job, unit)
         if start_day is not None:
             job = getattr(job, start_day)
+        else:
+            job.start_day = None
         if at is not None:
             if isinstance(at, dt_time):
                 if job.unit == "days" or job.start_day:
