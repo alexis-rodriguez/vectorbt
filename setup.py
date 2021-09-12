@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
-with open('README.md', 'r') as fh:
+with open('README.md', 'r', encoding="utf-8", errors='ignore') as fh:
     long_description = fh.read()
 
 version = {}
-with open("vectorbt/_version.py") as fp:
+with open("vectorbt/_version.py", encoding="utf-8") as fp:
     exec(fp.read(), version)
 
 setup(
@@ -27,7 +27,8 @@ setup(
         'matplotlib',
         'plotly>=4.12.0',
         'ipywidgets>=7.0.0',
-        'numba>=0.53.1',
+        'numba==0.53.1; python_version == "3.7"',
+        'numba>=0.53.1; python_version != "3.7"',
         'dill',
         'tqdm',
         'dateparser',
@@ -42,15 +43,15 @@ setup(
     ],
     extras_require={
         'full': [
-            'yfinance',
+            'yfinance>=0.1.63',
             'python-binance',
             'ccxt',
-            'ray; python_version < "3.9"',
-            'empyrical',
+            'ray>=1.4.1',
             'ta',
             'pandas_ta',
             'TA-Lib',
-            'python-telegram-bot>=13.4'  # LGPLv3
+            'python-telegram-bot>=13.4',  # LGPLv3
+            'quantstats'
         ],
         'cov': [
             'pytest',
@@ -62,12 +63,12 @@ setup(
         ]
     },
     python_requires='>=3.6, <3.10',
-    license='Apache 2.0',
+    license='Apache 2.0 with Commons Clause',
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Intended Audience :: Financial and Insurance Industry',
-        'License :: OSI Approved :: Apache Software License',
+        'License :: Free for non-commercial use',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',

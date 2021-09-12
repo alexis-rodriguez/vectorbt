@@ -1,3 +1,6 @@
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 """Utilities for validation during runtime."""
 
 import os
@@ -6,7 +9,8 @@ import pandas as pd
 from numba.core.registry import CPUDispatcher
 from inspect import signature, getmro
 import dill
-from collections.abc import Hashable
+from collections.abc import Hashable, Mapping
+from keyword import iskeyword
 
 from vectorbt import _typing as tp
 
@@ -14,9 +18,19 @@ from vectorbt import _typing as tp
 # ############# Checks ############# #
 
 
+def is_np_array(arg: tp.Any) -> bool:
+    """Check whether the argument is `np.ndarray`."""
+    return isinstance(arg, np.ndarray)
+
+
 def is_series(arg: tp.Any) -> bool:
     """Check whether the argument is `pd.Series`."""
     return isinstance(arg, pd.Series)
+
+
+def is_index(arg: tp.Any) -> bool:
+    """Check whether the argument is `pd.Index`."""
+    return isinstance(arg, pd.Index)
 
 
 def is_frame(arg: tp.Any) -> bool:
@@ -64,8 +78,15 @@ def is_iterable(arg: tp.Any) -> bool:
 
 def is_numba_func(arg: tp.Any) -> bool:
     """Check whether the argument is a Numba-compiled function."""
+    from vectorbt._settings import settings
+    numba_cfg = settings['numba']
+
+    if not numba_cfg['check_func_type']:
+        return True
     if 'NUMBA_DISABLE_JIT' in os.environ:
         if os.environ['NUMBA_DISABLE_JIT'] == '1':
+            if not numba_cfg['check_func_suffix']:
+                return True
             if arg.__name__.endswith('_nb'):
                 return True
     return isinstance(arg, CPUDispatcher)
@@ -117,22 +138,29 @@ def is_namedtuple(x: tp.Any) -> bool:
     return all(type(n) == str for n in f)
 
 
-def method_accepts_argument(method: tp.Callable, arg_name: str) -> bool:
-    """Check whether `method` accepts a positional or keyword argument with name `arg_name`."""
-    sig = signature(method)
-    if arg_name.startswith('**'):
-        return arg_name[2:] in [
+def func_accepts_arg(func: tp.Callable, arg_name: str, arg_kind: tp.Optional[tp.MaybeTuple[int]] = None) -> bool:
+    """Check whether `func` accepts a positional or keyword argument with name `arg_name`."""
+    sig = signature(func)
+    if arg_kind is not None and isinstance(arg_kind, int):
+        arg_kind = (arg_kind,)
+    if arg_kind is None:
+        if arg_name.startswith('**'):
+            return arg_name[2:] in [
+                p.name for p in sig.parameters.values()
+                if p.kind == p.VAR_KEYWORD
+            ]
+        if arg_name.startswith('*'):
+            return arg_name[1:] in [
+                p.name for p in sig.parameters.values()
+                if p.kind == p.VAR_POSITIONAL
+            ]
+        return arg_name in [
             p.name for p in sig.parameters.values()
-            if p.kind == p.VAR_KEYWORD
-        ]
-    if arg_name.startswith('*'):
-        return arg_name[1:] in [
-            p.name for p in sig.parameters.values()
-            if p.kind == p.VAR_POSITIONAL
+            if p.kind != p.VAR_POSITIONAL and p.kind != p.VAR_KEYWORD
         ]
     return arg_name in [
         p.name for p in sig.parameters.values()
-        if p.kind != p.VAR_POSITIONAL and p.kind != p.VAR_KEYWORD
+        if p.kind in arg_kind
     ]
 
 
@@ -153,7 +181,7 @@ def is_deep_equal(arg1: tp.Any, arg2: tp.Any, check_exact: bool = False, **kwarg
         __kwargs = dict()
         if len(kwargs) > 0:
             for k, v in _kwargs.items():
-                if method_accepts_argument(_method, k):
+                if func_accepts_arg(_method, k):
                     __kwargs[k] = v
         return __kwargs
 
@@ -233,6 +261,21 @@ def is_instance_of(arg: tp.Any, types: tp.MaybeTuple[tp.Union[tp.Type, str]]) ->
     return is_subclass_of(type(arg), types)
 
 
+def is_mapping(arg: tp.Any) -> bool:
+    """Check whether the arguments is a mapping."""
+    return isinstance(arg, Mapping)
+
+
+def is_mapping_like(arg: tp.Any) -> bool:
+    """Check whether the arguments is a mapping-like object."""
+    return is_mapping(arg) or is_series(arg) or is_index(arg) or is_namedtuple(arg)
+
+
+def is_valid_variable_name(arg: str) -> bool:
+    """Check whether the argument is a valid variable name."""
+    return arg.isidentifier() and not iskeyword(arg)
+
+
 # ############# Asserts ############# #
 
 def safe_assert(arg: tp.Any, msg: tp.Optional[str] = None) -> None:
@@ -258,7 +301,7 @@ def assert_not_none(arg: tp.Any) -> None:
         raise AssertionError(f"Argument cannot be None")
 
 
-def assert_type(arg: tp.Any, types: tp.MaybeTuple[tp.Type]) -> None:
+def assert_instance_of(arg: tp.Any, types: tp.MaybeTuple[tp.Type]) -> None:
     """Raise exception if the argument is none of types `types`."""
     if not is_instance_of(arg, types):
         if isinstance(types, tuple):
@@ -267,7 +310,7 @@ def assert_type(arg: tp.Any, types: tp.MaybeTuple[tp.Type]) -> None:
             raise AssertionError(f"Type must be {types}, not {type(arg)}")
 
 
-def assert_subclass(arg: tp.Type, classes: tp.MaybeTuple[tp.Type]) -> None:
+def assert_subclass_of(arg: tp.Type, classes: tp.MaybeTuple[tp.Type]) -> None:
     """Raise exception if the argument is not a subclass of classes `classes`."""
     if not is_subclass_of(arg, classes):
         if isinstance(classes, tuple):

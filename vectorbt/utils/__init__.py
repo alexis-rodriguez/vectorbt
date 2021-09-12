@@ -1,7 +1,10 @@
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 """Modules with utilities that are used throughout vectorbt."""
 
 from vectorbt.utils.config import atomic_dict, merge_dicts, Config, Configured, AtomicConfig
-from vectorbt.utils.template import Rep, Sub
+from vectorbt.utils.template import Sub, Rep, RepEval, RepFunc, deep_substitute
 from vectorbt.utils.decorators import CacheCondition, cached_property, cached_method
 from vectorbt.utils.figure import Figure, FigureWidget, make_figure, make_subplots
 from vectorbt.utils.random import set_seed
@@ -14,8 +17,11 @@ __all__ = [
     'Config',
     'Configured',
     'AtomicConfig',
-    'Rep',
     'Sub',
+    'Rep',
+    'RepEval',
+    'RepFunc',
+    'deep_substitute',
     'CacheCondition',
     'cached_property',
     'cached_method',

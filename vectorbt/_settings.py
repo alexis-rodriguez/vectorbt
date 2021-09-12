@@ -1,8 +1,22 @@
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 """Global settings.
 
 `settings` config is also accessible via `vectorbt.settings`.
 
+Here are the main properties of the `settings` config:
+
+* It's a nested config, that is, a config that consists of multiple sub-configs.
+    one per sub-package (e.g., 'data'), module (e.g., 'array_wrapper'), or even class (e.g., 'configured').
+    Each sub-config may consist of other sub-configs.
+* It has frozen keys - you cannot add other sub-configs or remove the existing ones, but you can modify them.
+* Each sub-config can either inherit the properties of the parent one by using `dict` or overwrite them
+    by using its own `vectorbt.utils.config.Config`. The main reason for defining an own config is to allow
+    adding new keys (e.g., 'plotting.layout').
+
 For example, you can change default width and height of each plot:
+
 ```python-repl
 >>> import vectorbt as vbt
 
@@ -10,10 +24,33 @@ For example, you can change default width and height of each plot:
 >>> vbt.settings['plotting']['layout']['height'] = 400
 ```
 
-Changes take effect immediately.
+The main sub-configs such as for plotting can be also accessed/modified using the dot notation:
+
+```
+>>> vbt.settings.plotting['layout']['width'] = 800
+```
+
+Some sub-configs allow the dot notation too but this depends whether they inherit the rules of the root config.
+
+```plaintext
+>>> vbt.settings.data - ok
+>>> vbt.settings.data.binance - ok
+>>> vbt.settings.data.binance.api_key - error
+>>> vbt.settings.data.binance['api_key'] - ok
+```
+
+Since this is only visible when looking at the source code, the advice is to always use the bracket notation.
 
 !!! note
-    All places in vectorbt import `settings` from `vectorbt._settings`, not from `vectorbt`.
+    Any change takes effect immediately. But whether its reflected immediately depends upon the place
+    that accesses the settings. For example, changing 'array_wrapper.freq` has an immediate effect because
+    the value is resolved every time `vectorbt.base.array_wrapper.ArrayWrapper.freq` is called.
+    On the other hand, changing 'portfolio.fillna_close' has only effect on `vectorbt.portfolio.base.Portfolio`
+    instances created in the future, not the existing ones, because the value is resolved upon the construction.
+    But mostly you can still force-update the default value by replacing the instance using
+    `vectorbt.portfolio.base.Portfolio.replace`.
+
+    All places in vectorbt import `settings` from `vectorbt._settings.settings`, not from `vectorbt`.
     Overwriting `vectorbt.settings` only overwrites the reference created for the user.
     Consider updating the settings config instead of replacing it.
 
@@ -42,10 +79,10 @@ import pkgutil
 import plotly.io as pio
 import plotly.graph_objects as go
 
-from vectorbt.utils.docs import to_doc
 from vectorbt.utils.config import Config
 from vectorbt.utils.datetime import get_local_tz, get_utc_tz
 from vectorbt.utils.decorators import CacheCondition
+from vectorbt.utils.template import Sub, RepEval
 from vectorbt.base.array_wrapper import ArrayWrapper
 from vectorbt.base.column_grouper import ColumnGrouper
 from vectorbt.records.col_mapper import ColumnMapper
@@ -78,12 +115,15 @@ class SettingsConfig(Config):
 
 settings = SettingsConfig(
     dict(
-        config=Config(  # flex
-            dict(
-                configured=Config(  # flex
-                    dict(
-                        readonly=True
-                    )
+        numba=dict(
+            check_func_type=True,
+            check_func_suffix=False
+        ),
+        config=Config(),  # flex
+        configured=dict(
+            config=Config(  # flex
+                dict(
+                    readonly=True
                 )
             ),
         ),
@@ -110,7 +150,8 @@ settings = SettingsConfig(
         array_wrapper=dict(
             column_only_select=False,
             group_select=True,
-            freq=None
+            freq=None,
+            silence_warnings=False
         ),
         datetime=dict(
             naive_tz=get_local_tz(),
@@ -131,7 +172,9 @@ settings = SettingsConfig(
                 dict(
                     enableRateLimit=True
                 )
-            )
+            ),
+            stats=Config(),  # flex
+            plots=Config()  # flex
         ),
         plotting=dict(
             use_widgets=True,
@@ -222,6 +265,101 @@ settings = SettingsConfig(
                 )
             ),
         ),
+        stats_builder=dict(
+            metrics='all',
+            tags='all',
+            silence_warnings=False,
+            template_mapping=Config(),  # flex
+            filters=Config(  # flex
+                dict(
+                    is_not_grouped=dict(
+                        filter_func=lambda self, metric_settings:
+                        not self.wrapper.grouper.is_grouped(group_by=metric_settings['group_by']),
+                        warning_message=Sub("Metric '$metric_name' does not support grouped data")
+                    ),
+                    has_freq=dict(
+                        filter_func=lambda self, metric_settings:
+                        self.wrapper.freq is not None,
+                        warning_message=Sub("Metric '$metric_name' requires frequency to be set")
+                    )
+                )
+            ),
+            settings=Config(  # flex
+                dict(
+                    to_timedelta=None,
+                    use_caching=True
+                )
+            ),
+            metric_settings=Config(),  # flex
+        ),
+        plots_builder=dict(
+            subplots='all',
+            tags='all',
+            silence_warnings=False,
+            template_mapping=Config(),  # flex
+            filters=Config(  # flex
+                dict(
+                    is_not_grouped=dict(
+                        filter_func=lambda self, subplot_settings:
+                        not self.wrapper.grouper.is_grouped(group_by=subplot_settings['group_by']),
+                        warning_message=Sub("Subplot '$subplot_name' does not support grouped data")
+                    ),
+                    has_freq=dict(
+                        filter_func=lambda self, subplot_settings:
+                        self.wrapper.freq is not None,
+                        warning_message=Sub("Subplot '$subplot_name' requires frequency to be set")
+                    )
+                )
+            ),
+            settings=Config(  # flex
+                dict(
+                    use_caching=True,
+                    hline_shape_kwargs=dict(
+                        type='line',
+                        line=dict(
+                            color='gray',
+                            dash="dash",
+                        )
+                    )
+                )
+            ),
+            subplot_settings=Config(),  # flex
+            show_titles=True,
+            hide_id_labels=True,
+            group_id_labels=True,
+            make_subplots_kwargs=Config(),  # flex
+            layout_kwargs=Config(),  # flex
+        ),
+        generic=dict(
+            stats=Config(  # flex
+                dict(
+                    filters=dict(
+                        has_mapping=dict(
+                            filter_func=lambda self, metric_settings:
+                            metric_settings.get('mapping', self.mapping) is not None
+                        )
+                    ),
+                    settings=dict(
+                        incl_all_keys=False
+                    )
+                )
+            ),
+            plots=Config()  # flex
+        ),
+        ranges=dict(
+            stats=Config(),  # flex
+            plots=Config()  # flex
+        ),
+        drawdowns=dict(
+            stats=Config(  # flex
+                dict(
+                    settings=dict(
+                        incl_active=False
+                    )
+                )
+            ),
+            plots=Config()  # flex
+        ),
         ohlcv=dict(
             plot_type='OHLC',
             column_names=dict(
@@ -231,16 +369,110 @@ settings = SettingsConfig(
                 close='Close',
                 volume='Volume'
             ),
+            stats=Config(),  # flex
+            plots=Config()  # flex
+        ),
+        signals=dict(
+            stats=Config(
+                dict(
+                    filters=dict(
+                        silent_has_other=dict(
+                            filter_func=lambda self, metric_settings:
+                            metric_settings.get('other', None) is not None
+                        ),
+                    ),
+                    settings=dict(
+                        other=None,
+                        other_name='Other',
+                        from_other=False
+                    )
+                )
+            ),  # flex
+            plots=Config()  # flex
         ),
         returns=dict(
-            year_freq='365 days'
+            year_freq='365 days',
+            defaults=Config(  # flex
+                dict(
+                    start_value=0.,
+                    window=10,
+                    minp=None,
+                    ddof=1,
+                    risk_free=0.,
+                    levy_alpha=2.,
+                    required_return=0.,
+                    cutoff=0.05
+                )
+            ),
+            stats=Config(  # flex
+                dict(
+                    filters=dict(
+                        has_year_freq=dict(
+                            filter_func=lambda self, metric_settings:
+                            self.year_freq is not None,
+                            warning_message=Sub("Metric '$metric_name' requires year frequency to be set")
+                        ),
+                        has_benchmark_rets=dict(
+                            filter_func=lambda self, metric_settings:
+                            metric_settings.get('benchmark_rets', self.benchmark_rets) is not None,
+                            warning_message=Sub("Metric '$metric_name' requires benchmark_rets to be set")
+                        )
+                    ),
+                    settings=dict(
+                        check_is_not_grouped=True
+                    )
+                )
+            ),
+            plots=Config()  # flex
+        ),
+        qs_adapter=dict(
+            defaults=Config(),  # flex
+        ),
+        records=dict(
+            stats=Config(),  # flex
+            plots=Config()  # flex
+        ),
+        mapped_array=dict(
+            stats=Config(  # flex
+                dict(
+                    filters=dict(
+                        has_mapping=dict(
+                            filter_func=lambda self, metric_settings:
+                            metric_settings.get('mapping', self.mapping) is not None
+                        )
+                    ),
+                    settings=dict(
+                        incl_all_keys=False
+                    )
+                )
+            ),
+            plots=Config()  # flex
+        ),
+        orders=dict(
+            stats=Config(),  # flex
+            plots=Config()  # flex
+        ),
+        trades=dict(
+            stats=Config(  # flex
+                dict(
+                    settings=dict(
+                        incl_open=False
+                    ),
+                    template_mapping=dict(
+                        incl_open_tags=RepEval("['open', 'closed'] if incl_open else ['closed']")
+                    )
+                )
+            ),
+            plots=Config()  # flex
+        ),
+        logs=dict(
+            stats=Config()  # flex
         ),
         portfolio=dict(
             call_seq='default',
             init_cash=100.,
             size=np.inf,
             size_type='amount',
-            signal_size_type='amount',
             fees=0.,
             fixed_fees=0.,
             slippage=0.,
@@ -250,7 +482,6 @@ settings = SettingsConfig(
             lock_cash=False,
             allow_partial=True,
             raise_reject=False,
-            close_first=False,
             val_price=np.inf,
             accumulate=False,
             sl_stop=np.nan,
@@ -259,13 +490,16 @@ settings = SettingsConfig(
             stop_entry_price='close',
             stop_exit_price='stoplimit',
             stop_conflict_mode='exit',
-            stop_exit_mode='close',
-            stop_update_mode='override',
+            upon_stop_exit='close',
+            upon_stop_update='override',
             use_stops=None,
             log=False,
-            conflict_mode='ignore',
+            upon_long_conflict='ignore',
+            upon_short_conflict='ignore',
+            upon_dir_conflict='ignore',
+            upon_opposite_entry='reversereduce',
             signal_direction='longonly',
-            order_direction='all',
+            order_direction='both',
             cash_sharing=False,
             call_pre_segment=False,
             call_post_segment=False,
@@ -273,40 +507,38 @@ settings = SettingsConfig(
             update_value=False,
             fill_pos_record=True,
             row_wise=False,
+            flexible=False,
             use_numba=True,
             seed=None,
             freq=None,
+            attach_call_seq=False,
             fillna_close=True,
-            stats=dict(
-                metrics='all',
-                incl_unrealized=False,
-                use_asset_returns=False,
-                use_positions=False,
-                use_caching=True,
-                silence_warnings=False,
-                template_mapping=Config(),  # flex
-                global_settings=Config(),  # flex
-                kwargs=Config()  # flex
-            ),
-            plot=dict(
-                subplots=['orders', 'trade_returns', 'cum_returns'],
-                grouped_subplots=None,
-                show_titles=True,
-                hide_id_labels=True,
-                group_id_labels=True,
-                make_subplots_kwargs=Config(),  # flex
-                silence_warnings=False,
-                template_mapping=Config(),  # flex
-                hline_shape_kwargs=Config(  # flex
-                    dict(
-                        type='line',
-                        line=dict(
-                            color='gray',
-                            dash="dash",
+            trades_type='exittrades',
+            stats=Config(  # flex
+                dict(
+                    filters=dict(
+                        has_year_freq=dict(
+                            filter_func=lambda self, metric_settings:
+                            metric_settings['year_freq'] is not None,
+                            warning_message=Sub("Metric '$metric_name' requires year frequency to be set")
                         )
+                    ),
+                    settings=dict(
+                        use_asset_returns=False,
+                        incl_open=False
+                    ),
+                    template_mapping=dict(
+                        incl_open_tags=RepEval("['open', 'closed'] if incl_open else ['closed']")
                     )
-                ),
-                kwargs=Config()  # flex
+                )
+            ),
+            plots=Config(  # flex
+                dict(
+                    subplots=['orders', 'trade_pnl', 'cum_returns'],
+                    settings=dict(
+                        use_asset_returns=False
+                    )
+                )
             )
         ),
         messaging=dict(
@@ -340,12 +572,28 @@ settings.register_templates()
 
 __pdoc__['settings'] = f"""Global settings config.
 
-## settings.config
+## settings.numba
 
-Configuration settings applied across `vectorbt.utils.config`.
+Settings applied to Numba.
 
 ```json
-{to_doc(settings['config'])}
+{settings['numba'].to_doc()}
+```
+
+## settings.config
+
+Settings applied to `vectorbt.utils.config.Config`.
+
+```json
+{settings['config'].to_doc()}
+```
+
+## settings.configured
+
+Settings applied to `vectorbt.utils.config.Configured`.
+
+```json
+{settings['configured'].to_doc()}
 ```
 
 ## settings.caching
@@ -355,7 +603,7 @@ Settings applied across `vectorbt.utils.decorators`.
 See `vectorbt.utils.decorators.should_cache`.
 
 ```json
-{to_doc(settings['caching'])}
+{settings['caching'].to_doc()}
 ```
 
 ## settings.broadcasting
@@ -363,7 +611,7 @@ See `vectorbt.utils.decorators.should_cache`.
 Settings applied across `vectorbt.base.reshape_fns`.
 
 ```json
-{to_doc(settings['broadcasting'])}
+{settings['broadcasting'].to_doc()}
 ```
 
 ## settings.array_wrapper
@@ -371,23 +619,23 @@ Settings applied across `vectorbt.base.reshape_fns`.
 Settings applied to `vectorbt.base.array_wrapper.ArrayWrapper`.
 
 ```json
-{to_doc(settings['array_wrapper'])}
+{settings['array_wrapper'].to_doc()}
 ```
 
 ## settings.datetime
 
-Datetime settings applied across `vectorbt.utils.datetime`.
+Settings applied across `vectorbt.utils.datetime`.
 
 ```json
-{to_doc(settings['datetime'])}
+{settings['datetime'].to_doc()}
 ```
 
 ## settings.data
 
-Data settings applied across `vectorbt.data`.
+Settings applied across `vectorbt.data`.
 
 ```json
-{to_doc(settings['data'])}
+{settings['data'].to_doc()}
 ```
 
 ### settings.data.binance
@@ -404,27 +652,123 @@ Keys can be defined per exchange. If a key is defined at the root, it applies to
 Settings applied to plotting Plotly figures.
 
 ```json
-{to_doc(settings['plotting'], replace={
+{settings['plotting'].to_doc(replace={
     'settings.plotting.themes.light.template': "{ ... templates/light.json ... }",
     'settings.plotting.themes.dark.template': "{ ... templates/dark.json ... }",
     'settings.plotting.themes.seaborn.template': "{ ... templates/seaborn.json ... }"
 }, path='settings.plotting')}
 ```
 
-## settings.ohlcv
+## settings.stats_builder
 
-OHLCV settings applied across `vectorbt.ohlcv_accessors`.
+Settings applied to `vectorbt.generic.stats_builder.StatsBuilderMixin`.
 
 ```json
-{to_doc(settings['ohlcv'])}
+{settings['stats_builder'].to_doc()}
+```
+
+## settings.plots_builder
+
+Settings applied to `vectorbt.generic.plots_builder.PlotsBuilderMixin`.
+
+```json
+{settings['plots_builder'].to_doc()}
+```
+
+## settings.generic
+
+Settings applied across `vectorbt.generic`.
+
+```json
+{settings['generic'].to_doc()}
+```
+
+## settings.generic.ranges
+
+Settings applied across `vectorbt.generic.ranges`.
+
+```json
+{settings['ranges'].to_doc()}
+```
+
+## settings.generic.drawdowns
+
+Settings applied across `vectorbt.generic.drawdowns`.
+
+```json
+{settings['drawdowns'].to_doc()}
+```
+
+## settings.ohlcv
+
+Settings applied across `vectorbt.ohlcv_accessors`.
+
+```json
+{settings['ohlcv'].to_doc()}
+```
+
+## settings.signals
+
+Settings applied across `vectorbt.signals`.
+
+```json
+{settings['signals'].to_doc()}
 ```
 
 ## settings.returns
 
-Returns settings applied across `vectorbt.returns`.
+Settings applied across `vectorbt.returns`.
 
 ```json
-{to_doc(settings['returns'])}
+{settings['returns'].to_doc()}
+```
+
+## settings.qs_adapter
+
+Settings applied across `vectorbt.returns.qs_adapter`.
+
+```json
+{settings['qs_adapter'].to_doc()}
+```
+
+## settings.records
+
+Settings applied across `vectorbt.records.base`.
+
+```json
+{settings['records'].to_doc()}
+```
+
+## settings.mapped_array
+
+Settings applied across `vectorbt.records.mapped_array`.
+
+```json
+{settings['mapped_array'].to_doc()}
+```
+
+## settings.portfolio.orders
+
+Settings applied across `vectorbt.portfolio.orders`.
+
+```json
+{settings['orders'].to_doc()}
+```
+
+## settings.portfolio.trades
+
+Settings applied across `vectorbt.portfolio.trades`.
+
+```json
+{settings['trades'].to_doc()}
+```
+
+## settings.portfolio.logs
+
+Settings applied across `vectorbt.portfolio.logs`.
+
+```json
+{settings['logs'].to_doc()}
 ```
 
 ## settings.portfolio
@@ -432,15 +776,15 @@ Returns settings applied across `vectorbt.returns`.
 Settings applied to `vectorbt.portfolio.base.Portfolio`.
 
 ```json
-{to_doc(settings['portfolio'])}
+{settings['portfolio'].to_doc()}
 ```
 
 ## settings.messaging
 
-Messaging settings applied across `vectorbt.messaging`.
+Settings applied across `vectorbt.messaging`.
 
 ```json
-{to_doc(settings['messaging'])}
+{settings['messaging'].to_doc()}
 ```
 
 ### settings.messaging.telegram

@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 # Run this app with `python app.py` and
 # visit http://127.0.0.1:8050/ in your web browser.
 
@@ -19,17 +22,17 @@ import json
 import random
 import yfinance as yf
 import talib
-from collections import OrderedDict
 from talib import abstract
 from talib._ta_lib import (
     CandleSettingType,
     RangeType,
     _ta_set_candle_settings
 )
-import vectorbt as vbt
 from vectorbt import settings
 from vectorbt.utils.config import merge_dicts
 from vectorbt.utils.colors import adjust_opacity
+from vectorbt.portfolio.enums import Direction, DirectionConflictMode
+from vectorbt.portfolio.base import Portfolio
 
 USE_CACHING = os.environ.get(
     "USE_CACHING",
@@ -76,10 +79,9 @@ periods = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max
 intervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1d', '5d', '1wk', '1mo', '3mo']
 patterns = talib.get_function_groups()['Pattern Recognition']
 stats_table_columns = ["Metric", "Buy & Hold", "Random (Median)", "Strategy", "Z-Score"]
-directions = vbt.portfolio.enums.Direction._fields
-conflict_modes = vbt.portfolio.enums.ConflictMode._fields
+directions = Direction._fields
+conflict_modes = DirectionConflictMode._fields
 plot_types = ['OHLC', 'Candlestick']
-subplots = OrderedDict([(k, v['title']) for k, v in vbt.Portfolio.subplot_settings.items()])
 
 # Colors
 color_schema = settings['plotting']['color_schema']
@@ -181,7 +183,7 @@ default_direction = directions[0]
 default_conflict_mode = conflict_modes[0]
 default_sim_options = ['allow_accumulate']
 default_n_random_strat = 50
-default_stats_options = ['incl_unrealized']
+default_stats_options = ['incl_open']
 default_layout = dict(
     autosize=True,
     margin=dict(b=40, t=20),
@@ -284,8 +286,10 @@ app.layout = html.Div(
                                                                 html.Label("Select subplots:"),
                                                                 dcc.Dropdown(
                                                                     id="subplot_dropdown",
-                                                                    options=[{"value": k, "label": v}
-                                                                             for k, v in subplots.items()],
+                                                                    options=[
+                                                                        {"value": k, "label": v['title']}
+                                                                        for k, v in Portfolio.subplots.items()
+                                                                    ],
                                                                     multi=True,
                                                                     value=default_subplots,
                                                                 ),
@@ -895,8 +899,11 @@ app.layout = html.Div(
                                         dcc.Checklist(
                                             id="stats_checklist",
                                             options=[{
-                                                "label": "Include unrealized P&L in stats",
-                                                "value": "incl_unrealized"
+                                                "label": "Include open trades in stats",
+                                                "value": "incl_open"
+                                            }, {
+                                                "label": "Use positions instead of trades in stats",
+                                                "value": "use_positions"
                                             }],
                                             value=default_stats_options,
                                             style={
@@ -1281,14 +1288,14 @@ def simulate_portfolio(df, interval, date_range, selected_data, entry_patterns, 
 
     # Simulate portfolio
     def _simulate_portfolio(size, init_cash='autoalign'):
-        return vbt.Portfolio.from_signals(
+        return Portfolio.from_signals(
             close=df['Close'],
             entries=size > 0,
             exits=size < 0,
             price=df['Open'],
             size=np.abs(size),
             direction=direction,
-            conflict_mode=conflict_mode,
+            upon_dir_conflict=conflict_mode,
             accumulate='allow_accumulate' in sim_options,
             init_cash=init_cash,
             fees=float(fees) / 100,
@@ -1300,7 +1307,7 @@ def simulate_portfolio(df, interval, date_range, selected_data, entry_patterns, 
     # Align initial cash across main and random strategies
     aligned_portfolio = _simulate_portfolio(np.hstack((main_size[:, None], rand_size)))
     # Fixate initial cash for indexing
-    aligned_portfolio = aligned_portfolio.copy(
+    aligned_portfolio = aligned_portfolio.replace(
         init_cash=aligned_portfolio.init_cash
     )
     # Separate portfolios
@@ -1358,9 +1365,9 @@ def update_stats(window_width, subplots, df_json, symbol, interval, date_range, 
         entry_dates, exit_dates, fees, fixed_fees, slippage, direction, conflict_mode,
         sim_options, n_random_strat, prob_options, entry_prob, exit_prob)
 
-    subplot_kwags = dict()
+    subplot_settings = dict()
     if 'cum_returns' in subplots:
-        subplot_kwags['cum_returns_kwargs'] = dict(
+        subplot_settings['cum_returns'] = dict(
             benchmark_kwargs=dict(
                 trace_kwargs=dict(
                     line=dict(
@@ -1373,7 +1380,7 @@ def update_stats(window_width, subplots, df_json, symbol, interval, date_range, 
     height = int(6 / 21 * 2 / 3 * window_width)
     fig = main_portfolio.plot(
         subplots=subplots,
-        **subplot_kwags,
+        subplot_settings=subplot_settings,
         **merge_dicts(
             default_layout,
             dict(
@@ -1401,10 +1408,11 @@ def update_stats(window_width, subplots, df_json, symbol, interval, date_range, 
             return str(_chop_microseconds(x))
         return str(x)
 
-    incl_unrealized = 'incl_unrealized' in stats_options
-    main_stats = main_portfolio.stats(incl_unrealized=incl_unrealized)
-    hold_stats = hold_portfolio.stats(incl_unrealized=True)
-    rand_stats = rand_portfolio.stats(incl_unrealized=incl_unrealized, agg_func=None)
+    incl_open = 'incl_open' in stats_options
+    use_positions = 'use_positions' in stats_options
+    main_stats = main_portfolio.stats(settings=dict(incl_open=incl_open, use_positions=use_positions))
+    hold_stats = hold_portfolio.stats(settings=dict(incl_open=True, use_positions=use_positions))
+    rand_stats = rand_portfolio.stats(settings=dict(incl_open=incl_open, use_positions=use_positions), agg_func=None)
     rand_stats_median = rand_stats.iloc[:, 3:].median(axis=0)
     rand_stats_mean = rand_stats.iloc[:, 3:].mean(axis=0)
     rand_stats_std = rand_stats.iloc[:, 3:].std(axis=0, ddof=0)

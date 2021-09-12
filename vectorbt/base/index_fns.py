@@ -1,3 +1,6 @@
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 """Functions for working with index/columns.
 
 Index functions perform operations on index objects, such as stacking, combining,
@@ -23,7 +26,7 @@ def to_any_index(index_like: tp.IndexLike) -> tp.Index:
 
 def get_index(arg: tp.SeriesFrame, axis: int) -> tp.Index:
     """Get index of `arg` by `axis`."""
-    checks.assert_type(arg, (pd.Series, pd.DataFrame))
+    checks.assert_instance_of(arg, (pd.Series, pd.DataFrame))
     checks.assert_in(axis, (0, 1))
 
     if axis == 0:
@@ -48,7 +51,7 @@ def index_from_values(values: tp.ArrayLikeSequence, name: tp.Optional[str] = Non
         if v is None or isinstance(v, scalar_types):
             value_names.append(v)
         elif isinstance(v, np.ndarray):
-            if (v == v.item(0)).all():
+            if np.isclose(v, v.item(0), equal_nan=True).all():
                 value_names.append(v.item(0))
             else:
                 value_names.append('array_%d' % i)
@@ -137,43 +140,46 @@ def combine_indexes(indexes: tp.Sequence[tp.IndexLike],
     return new_index
 
 
-def drop_levels(index: tp.Index, levels: tp.MaybeLevelSequence) -> tp.Index:
-    """Softly drop `levels` in `index` by their name/position."""
+def drop_levels(index: tp.Index, levels: tp.MaybeLevelSequence, strict: bool = True) -> tp.Index:
+    """Drop `levels` in `index` by their name/position."""
     if not isinstance(index, pd.MultiIndex):
         return index
+    if strict:
+        return index.droplevel(levels)
 
-    levels_to_drop = []
+    levels_to_drop = set()
     if isinstance(levels, (int, str)):
         levels = (levels,)
     for level in levels:
         if level in index.names:
-            if level not in levels_to_drop:
-                levels_to_drop.append(level)
-        elif isinstance(level, int):
-            if 0 <= level < index.nlevels or level == -1:
-                if level not in levels_to_drop:
-                    levels_to_drop.append(level)
+            levels_to_drop.add(level)
+        elif isinstance(level, int) and 0 <= level < index.nlevels or level == -1:
+            levels_to_drop.add(level)
     if len(levels_to_drop) < index.nlevels:
         # Drop only if there will be some indexes left
-        return index.droplevel(levels_to_drop)
+        return index.droplevel(list(levels_to_drop))
     return index
 
 
-def rename_levels(index: tp.Index, name_dict: tp.Dict[str, tp.Any]) -> tp.Index:
+def rename_levels(index: tp.Index, name_dict: tp.Dict[str, tp.Any], strict: bool = True) -> tp.Index:
     """Rename levels in `index` by `name_dict`."""
     for k, v in name_dict.items():
         if isinstance(index, pd.MultiIndex):
             if k in index.names:
                 index = index.rename(v, level=k)
+            elif strict:
+                raise KeyError(f"Level '{k}' not found")
         else:
             if index.name == k:
                 index.name = v
+            elif strict:
+                raise KeyError(f"Level '{k}' not found")
     return index
 
 
 def select_levels(index: tp.Index, level_names: tp.MaybeLevelSequence) -> tp.Index:
     """Build a new index by selecting one or multiple `level_names` from `index`."""
-    checks.assert_type(index, pd.MultiIndex)
+    checks.assert_instance_of(index, pd.MultiIndex)
 
     if isinstance(level_names, (int, str)):
         return index.get_level_values(level_names)
@@ -332,7 +338,7 @@ def pick_levels(index: tp.Index,
         required_levels = []
     if optional_levels is None:
         optional_levels = []
-    checks.assert_type(index, pd.MultiIndex)
+    checks.assert_instance_of(index, pd.MultiIndex)
 
     n_opt_set = len(list(filter(lambda x: x is not None, optional_levels)))
     n_req_set = len(list(filter(lambda x: x is not None, required_levels)))
@@ -349,7 +355,7 @@ def pick_levels(index: tp.Index,
     for level in optional_levels:
         level_pos = None
         if level is not None:
-            checks.assert_type(level, (int, str))
+            checks.assert_instance_of(level, (int, str))
             if isinstance(level, str):
                 level_pos = index.names.index(level)
             else:
@@ -364,7 +370,7 @@ def pick_levels(index: tp.Index,
     for level in required_levels:
         level_pos = None
         if level is not None:
-            checks.assert_type(level, (int, str))
+            checks.assert_instance_of(level, (int, str))
             if isinstance(level, str):
                 level_pos = index.names.index(level)
             else:

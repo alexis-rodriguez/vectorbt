@@ -1,3 +1,6 @@
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 """Utilities for working with arrays."""
 
 import numpy as np
@@ -73,9 +76,9 @@ def uniform_summing_to_one_nb(n: int) -> tp.Array1d:
 def renormalize(a: tp.MaybeArray[float], from_range: tp.Tuple[float, float],
                 to_range: tp.Tuple[float, float]) -> tp.MaybeArray[float]:
     """Renormalize `a` from one range to another."""
-    delta1 = from_range[1] - from_range[0]
-    delta2 = to_range[1] - to_range[0]
-    return (delta2 * (a - from_range[0]) / delta1) + to_range[0]
+    from_delta = from_range[1] - from_range[0]
+    to_delta = to_range[1] - to_range[0]
+    return (to_delta * (a - from_range[0]) / from_delta) + to_range[0]
 
 
 renormalize_nb = njit(cache=True)(renormalize)

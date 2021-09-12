@@ -1,3 +1,6 @@
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 """Utilities for constructing and displaying figures."""
 
 from plotly.graph_objects import Figure as _Figure, FigureWidget as _FigureWidget
@@ -22,13 +25,13 @@ class FigureMixin:
         """Display the figure in PNG format."""
         raise NotImplementedError
 
-    def show_png(self) -> None:
+    def show_png(self, **kwargs) -> None:
         """Display the figure in PNG format."""
-        self.show(renderer="png")
+        self.show(renderer="png", **kwargs)
 
-    def show_svg(self) -> None:
+    def show_svg(self, **kwargs) -> None:
         """Display the figure in SVG format."""
-        self.show(renderer="svg")
+        self.show(renderer="svg", **kwargs)
 
 
 class Figure(_Figure, FigureMixin):

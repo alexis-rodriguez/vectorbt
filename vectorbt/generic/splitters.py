@@ -1,3 +1,6 @@
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 """Splitters for cross-validation.
 
 Defines splitter classes similar (but may not compatible) to `sklearn.model_selection.BaseCrossValidator`."""
@@ -14,7 +17,8 @@ from vectorbt.base.reshape_fns import to_any_array
 RangesT = tp.Generator[tp.Sequence[tp.ArrayLikeSequence], None, None]
 
 
-def split_ranges_into_sets(start_idxs: tp.ArrayLike, end_idxs: tp.ArrayLike,
+def split_ranges_into_sets(start_idxs: tp.ArrayLike,
+                           end_idxs: tp.ArrayLike,
                            set_lens: tp.MaybeSequence[tp.Sequence[float]] = (),
                            left_to_right: tp.MaybeSequence[bool] = True) -> RangesT:
     """Generate ranges between each in `start_idxs` and `end_idxs` and
@@ -104,8 +108,12 @@ class BaseSplitter:
 class RangeSplitter(BaseSplitter):
     """Range splitter."""
 
-    def split(self, X: tp.ArrayLike, n: tp.Optional[int] = None, range_len: tp.Optional[float] = None,
-              min_len: int = 1, start_idxs: tp.Optional[tp.ArrayLike] = None,
+    def split(self,
+              X: tp.ArrayLike,
+              n: tp.Optional[int] = None,
+              range_len: tp.Optional[float] = None,
+              min_len: int = 1,
+              start_idxs: tp.Optional[tp.ArrayLike] = None,
               end_idxs: tp.Optional[tp.ArrayLike] = None, **kwargs) -> RangesT:
         """Either split into `n` ranges each `range_len` long, or split into ranges between
         `start_idxs` and `end_idxs`, and concatenate along the column axis.
@@ -173,8 +181,12 @@ class RangeSplitter(BaseSplitter):
 class RollingSplitter(BaseSplitter):
     """Rolling walk-forward splitter."""
 
-    def split(self, X: tp.ArrayLike, n: tp.Optional[int] = None, window_len: tp.Optional[float] = None,
-              min_len: int = 1, **kwargs) -> RangesT:
+    def split(self,
+              X: tp.ArrayLike,
+              n: tp.Optional[int] = None,
+              window_len: tp.Optional[float] = None,
+              min_len: int = 1,
+              **kwargs) -> RangesT:
         """Split by rolling a window.
 
         `**kwargs` are passed to `split_ranges_into_sets`."""
@@ -216,7 +228,11 @@ class RollingSplitter(BaseSplitter):
 class ExpandingSplitter(BaseSplitter):
     """Expanding walk-forward splitter."""
 
-    def split(self, X: tp.ArrayLike, n: tp.Optional[int] = None, min_len: int = 1, **kwargs) -> RangesT:
+    def split(self,
+              X: tp.ArrayLike,
+              n: tp.Optional[int] = None,
+              min_len: int = 1,
+              **kwargs) -> RangesT:
         """Similar to `RollingSplitter.split`, but expanding.
 
         `**kwargs` are passed to `split_ranges_into_sets`."""

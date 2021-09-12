@@ -1,16 +1,25 @@
+# Copyright (c) 2021 Oleg Polakow. All rights reserved.
+# This code is licensed under Apache 2.0 with Commons Clause license (see LICENSE.md for details)
+
 """Class for mapping column arrays."""
 
 from vectorbt import _typing as tp
 from vectorbt.utils.decorators import cached_property, cached_method
-from vectorbt.base.reshape_fns import to_1d
-from vectorbt.base.array_wrapper import ArrayWrapper
+from vectorbt.base.reshape_fns import to_1d_array
+from vectorbt.base.array_wrapper import ArrayWrapper, Wrapping
 from vectorbt.records import nb
 
 
-class ColumnMapper:
+class ColumnMapper(Wrapping):
     """Used by `vectorbt.records.base.Records` and `vectorbt.records.mapped_array.MappedArray`
     classes to make use of column and group metadata."""
-    def __init__(self, wrapper: ArrayWrapper, col_arr: tp.Array1d) -> None:
+    def __init__(self, wrapper: ArrayWrapper, col_arr: tp.Array1d, **kwargs) -> None:
+        Wrapping.__init__(
+            self,
+            wrapper,
+            col_arr=col_arr,
+            **kwargs
+        )
         self._wrapper = wrapper
         self._col_arr = col_arr
 
@@ -20,9 +29,9 @@ class ColumnMapper:
         Returns element indices and new column array.
         Automatically decides whether to use column range or column map."""
         if self.is_sorted():
-            new_indices, new_col_arr = nb.col_range_select_nb(self.col_range, to_1d(col_idxs))  # faster
+            new_indices, new_col_arr = nb.col_range_select_nb(self.col_range, to_1d_array(col_idxs))  # faster
         else:
-            new_indices, new_col_arr = nb.col_map_select_nb(self.col_map, to_1d(col_idxs))
+            new_indices, new_col_arr = nb.col_map_select_nb(self.col_map, to_1d_array(col_idxs))
         return new_indices, new_col_arr
 
     @property
