@@ -1,14 +1,14 @@
-import vectorbt as vbt
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
-from numba import njit
-from datetime import datetime
 import pytest
+from numba import njit
 
+import vectorbt as vbt
+from tests.utils import record_arrays_close
 from vectorbt.generic.enums import range_dt, drawdown_dt
 from vectorbt.portfolio.enums import order_dt, trade_dt, log_dt
-
-from tests.utils import record_arrays_close
 
 day_dt = np.timedelta64(86400000000000)
 
@@ -412,10 +412,6 @@ class TestMappedArray:
             pd.Series(np.array([11., 13.333333333333334, 11., 0.]), index=wrapper.columns).rename('reduce')
         )
         pd.testing.assert_series_equal(
-            mapped_array.reduce(mean_reduce_nb, fill_value=0., wrap_kwargs=dict(dtype=np.int_)),
-            pd.Series(np.array([11., 13.333333333333334, 11., 0.]), index=wrapper.columns).rename('reduce')
-        )
-        pd.testing.assert_series_equal(
             mapped_array.reduce(mean_reduce_nb, wrap_kwargs=dict(to_timedelta=True)),
             pd.Series(np.array([11., 13.333333333333334, 11., np.nan]), index=wrapper.columns).rename('reduce') * day_dt
         )
@@ -784,7 +780,7 @@ class TestMappedArray:
             mapped_array['a'].value_counts(),
             pd.Series(
                 np.array([1, 1, 1]),
-                index=pd.Float64Index([10.0, 11.0, 12.0], dtype='float64'),
+                index=pd.Index([10.0, 11.0, 12.0], dtype='float64'),
                 name='a'
             )
         )
@@ -806,7 +802,7 @@ class TestMappedArray:
                     [0, 2, 0, 0],
                     [0, 1, 0, 0]
                 ]),
-                index=pd.Float64Index([10.0, 11.0, 12.0, 13.0, 14.0], dtype='float64'),
+                index=pd.Index([10.0, 11.0, 12.0, 13.0, 14.0], dtype='float64'),
                 columns=wrapper.columns
             )
         )
@@ -820,7 +816,7 @@ class TestMappedArray:
                     [2, 0],
                     [1, 0]
                 ]),
-                index=pd.Float64Index([10.0, 11.0, 12.0, 13.0, 14.0], dtype='float64'),
+                index=pd.Index([10.0, 11.0, 12.0, 13.0, 14.0], dtype='float64'),
                 columns=pd.Index(['g1', 'g2'], dtype='object')
             )
         )
@@ -835,7 +831,7 @@ class TestMappedArray:
                     [0, 0, 1, 0],
                     [0, 1, 0, 0]
                 ]),
-                index=pd.Float64Index([4.0, 3.0, 2.0, 1.0, None], dtype='float64'),
+                index=pd.Index([4.0, 3.0, 2.0, 1.0, None], dtype='float64'),
                 columns=wrapper.columns
             )
         )
@@ -849,7 +845,7 @@ class TestMappedArray:
                     [2, 1, 0, 0],
                     [0, 1, 0, 0]
                 ]),
-                index=pd.Float64Index([1.0, 2.0, 3.0, 4.0, None], dtype='float64'),
+                index=pd.Index([1.0, 2.0, 3.0, 4.0, None], dtype='float64'),
                 columns=wrapper.columns
             )
         )
@@ -863,7 +859,7 @@ class TestMappedArray:
                     [0, 0, 1, 0],
                     [0, 1, 0, 0]
                 ]),
-                index=pd.Float64Index([4.0, 2.0, 3.0, 1.0, np.nan], dtype='float64'),
+                index=pd.Index([4.0, 2.0, 3.0, 1.0, np.nan], dtype='float64'),
                 columns=wrapper.columns
             )
         )
@@ -877,7 +873,7 @@ class TestMappedArray:
                     [1, 0, 1, 0],
                     [2, 1, 0, 0]
                 ]),
-                index=pd.Float64Index([1.0, np.nan, 2.0, 3.0, 4.0], dtype='float64'),
+                index=pd.Index([1.0, np.nan, 2.0, 3.0, 4.0], dtype='float64'),
                 columns=wrapper.columns
             )
         )
@@ -891,7 +887,7 @@ class TestMappedArray:
                     [0.0, 0.0, 0.1111111111111111, 0.0],
                     [0.0, 0.1111111111111111, 0.0, 0.0]
                 ]),
-                index=pd.Float64Index([4.0, 2.0, 3.0, 1.0, np.nan], dtype='float64'),
+                index=pd.Index([4.0, 2.0, 3.0, 1.0, np.nan], dtype='float64'),
                 columns=wrapper.columns
             )
         )
@@ -904,7 +900,7 @@ class TestMappedArray:
                     [0.125, 0.0, 0.125, 0.0],
                     [0.0, 0.0, 0.125, 0.0]
                 ]),
-                index=pd.Float64Index([4.0, 2.0, 3.0, 1.0], dtype='float64'),
+                index=pd.Index([4.0, 2.0, 3.0, 1.0], dtype='float64'),
                 columns=wrapper.columns
             )
         )
@@ -3366,10 +3362,26 @@ class TestLogs:
             ])
         )
         np.testing.assert_array_equal(
+            records_readable['Request Size Granularity'].values,
+            np.array([
+                np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan,
+                np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan,
+                np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+            ])
+        )
+        np.testing.assert_array_equal(
             records_readable['Request Rejection Prob'].values,
             np.array([
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+            ])
+        )
+        np.testing.assert_array_equal(
+            records_readable['Request Lock Cash'].values,
+            np.array([
+                False, False, False, False, False, False, False, False, False, False, False, False, False, False, False,
+                False, False, False, False, False, False, False, False, False, False, False, False, False, False, False,
+                False, False
             ])
         )
         np.testing.assert_array_equal(

@@ -1,8 +1,9 @@
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
-from numba import njit
 import pytest
-from datetime import datetime
+from numba import njit
 
 import vectorbt as vbt
 from vectorbt.base import (
@@ -17,10 +18,6 @@ from vectorbt.base import (
 ray_available = True
 try:
     import ray
-
-    if ray.is_initialized():
-        ray.shutdown()
-    ray.init()
 except:
     ray_available = False
 
@@ -66,9 +63,13 @@ def setup_module():
     vbt.settings.caching.enabled = False
     vbt.settings.caching.whitelist = []
     vbt.settings.caching.blacklist = []
+    if ray_available:
+        ray.init(local_mode=True, num_cpus=1)
 
 
 def teardown_module():
+    if ray_available:
+        ray.shutdown()
     vbt.settings.reset()
 
 
@@ -92,11 +93,11 @@ class TestColumnGrouper:
         )
         pd.testing.assert_index_equal(
             column_grouper.group_by_to_index(grouped_columns, group_by=0),
-            pd.Int64Index([1, 1, 1, 1, 0, 0, 0, 0], dtype='int64', name='first')
+            pd.Index([1, 1, 1, 1, 0, 0, 0, 0], dtype='int64', name='first')
         )
         pd.testing.assert_index_equal(
             column_grouper.group_by_to_index(grouped_columns, group_by='first'),
-            pd.Int64Index([1, 1, 1, 1, 0, 0, 0, 0], dtype='int64', name='first')
+            pd.Index([1, 1, 1, 1, 0, 0, 0, 0], dtype='int64', name='first')
         )
         pd.testing.assert_index_equal(
             column_grouper.group_by_to_index(grouped_columns, group_by=[0, 1]),
@@ -127,12 +128,12 @@ class TestColumnGrouper:
         pd.testing.assert_index_equal(
             column_grouper.group_by_to_index(
                 grouped_columns, group_by=np.array([3, 2, 1, 1, 1, 0, 0, 0])),
-            pd.Int64Index([3, 2, 1, 1, 1, 0, 0, 0], dtype='int64')
+            pd.Index([3, 2, 1, 1, 1, 0, 0, 0], dtype='int64')
         )
         pd.testing.assert_index_equal(
             column_grouper.group_by_to_index(
                 grouped_columns, group_by=pd.Index([3, 2, 1, 1, 1, 0, 0, 0], name='fourth')),
-            pd.Int64Index([3, 2, 1, 1, 1, 0, 0, 0], dtype='int64', name='fourth')
+            pd.Index([3, 2, 1, 1, 1, 0, 0, 0], dtype='int64', name='fourth')
         )
 
     def test_get_groups_and_index(self):
@@ -141,7 +142,7 @@ class TestColumnGrouper:
         pd.testing.assert_index_equal(b, grouped_columns)
         a, b = column_grouper.get_groups_and_index(grouped_columns, group_by=0)
         np.testing.assert_array_equal(a, np.array([0, 0, 0, 0, 1, 1, 1, 1]))
-        pd.testing.assert_index_equal(b, pd.Int64Index([1, 0], dtype='int64', name='first'))
+        pd.testing.assert_index_equal(b, pd.Index([1, 0], dtype='int64', name='first'))
         a, b = column_grouper.get_groups_and_index(grouped_columns, group_by=[0, 1])
         np.testing.assert_array_equal(a, np.array([0, 0, 1, 1, 2, 2, 3, 3]))
         pd.testing.assert_index_equal(b, pd.MultiIndex.from_tuples([
@@ -267,15 +268,15 @@ class TestColumnGrouper:
         assert column_grouper.ColumnGrouper(grouped_columns, group_by=None).resolve_group_by() is None  # default
         pd.testing.assert_index_equal(
             column_grouper.ColumnGrouper(grouped_columns, group_by=None).resolve_group_by(group_by=0),  # overrides
-            pd.Int64Index([1, 1, 1, 1, 0, 0, 0, 0], dtype='int64', name='first')
+            pd.Index([1, 1, 1, 1, 0, 0, 0, 0], dtype='int64', name='first')
         )
         pd.testing.assert_index_equal(
             column_grouper.ColumnGrouper(grouped_columns, group_by=0).resolve_group_by(),  # default
-            pd.Int64Index([1, 1, 1, 1, 0, 0, 0, 0], dtype='int64', name='first')
+            pd.Index([1, 1, 1, 1, 0, 0, 0, 0], dtype='int64', name='first')
         )
         pd.testing.assert_index_equal(
             column_grouper.ColumnGrouper(grouped_columns, group_by=0).resolve_group_by(group_by=1),  # overrides
-            pd.Int64Index([3, 3, 2, 2, 1, 1, 0, 0], dtype='int64', name='second')
+            pd.Index([3, 3, 2, 2, 1, 1, 0, 0], dtype='int64', name='second')
         )
 
     def test_get_groups(self):
@@ -295,7 +296,7 @@ class TestColumnGrouper:
         )
         pd.testing.assert_index_equal(
             column_grouper.ColumnGrouper(grouped_columns).get_columns(group_by=0),
-            pd.Int64Index([1, 0], dtype='int64', name='first')
+            pd.Index([1, 0], dtype='int64', name='first')
         )
 
     def test_get_group_lens(self):
@@ -679,7 +680,7 @@ class TestArrayWrapper:
     def test_freq(self):
         assert sr2_wrapper.freq is None
         assert sr2_wrapper.replace(freq='1D').freq == day_dt
-        assert sr2_wrapper.replace(index=pd.Index([
+        assert sr2_wrapper.replace(index=pd.DatetimeIndex([
             datetime(2020, 1, 1),
             datetime(2020, 1, 2),
             datetime(2020, 1, 3)
@@ -1007,11 +1008,11 @@ class TestIndexFns:
     def test_index_from_values(self):
         pd.testing.assert_index_equal(
             index_fns.index_from_values([0.1, 0.2], name='a'),
-            pd.Float64Index([0.1, 0.2], dtype='float64', name='a')
+            pd.Index([0.1, 0.2], dtype='float64', name='a')
         )
         pd.testing.assert_index_equal(
             index_fns.index_from_values(np.tile(np.arange(1, 4)[:, None][:, None], (1, 3, 3)), name='b'),
-            pd.Int64Index([1, 2, 3], dtype='int64', name='b')
+            pd.Index([1, 2, 3], dtype='int64', name='b')
         )
         pd.testing.assert_index_equal(
             index_fns.index_from_values(np.random.uniform(size=(3, 3, 3)), name='c'),
@@ -1037,10 +1038,10 @@ class TestIndexFns:
         )
 
     def test_repeat_index(self):
-        i = pd.Int64Index([1, 2, 3], name='i')
+        i = pd.Index([1, 2, 3], name='i')
         pd.testing.assert_index_equal(
             index_fns.repeat_index(i, 3),
-            pd.Int64Index([1, 1, 1, 2, 2, 2, 3, 3, 3], dtype='int64', name='i')
+            pd.Index([1, 1, 1, 2, 2, 2, 3, 3, 3], dtype='int64', name='i')
         )
         pd.testing.assert_index_equal(
             index_fns.repeat_index(multi_i, 3),
@@ -1058,7 +1059,7 @@ class TestIndexFns:
         )
         pd.testing.assert_index_equal(
             index_fns.repeat_index([0], 3),  # empty
-            pd.Int64Index([0, 1, 2], dtype='int64')
+            pd.Index([0, 1, 2], dtype='int64')
         )
         pd.testing.assert_index_equal(
             index_fns.repeat_index(sr_none.index, 3),  # simple range
@@ -1066,10 +1067,10 @@ class TestIndexFns:
         )
 
     def test_tile_index(self):
-        i = pd.Int64Index([1, 2, 3], name='i')
+        i = pd.Index([1, 2, 3], name='i')
         pd.testing.assert_index_equal(
             index_fns.tile_index(i, 3),
-            pd.Int64Index([1, 2, 3, 1, 2, 3, 1, 2, 3], dtype='int64', name='i')
+            pd.Index([1, 2, 3, 1, 2, 3, 1, 2, 3], dtype='int64', name='i')
         )
         pd.testing.assert_index_equal(
             index_fns.tile_index(multi_i, 3),
@@ -1087,7 +1088,7 @@ class TestIndexFns:
         )
         pd.testing.assert_index_equal(
             index_fns.tile_index([0], 3),  # empty
-            pd.Int64Index([0, 1, 2], dtype='int64')
+            pd.Index([0, 1, 2], dtype='int64')
         )
         pd.testing.assert_index_equal(
             index_fns.tile_index(sr_none.index, 3),  # simple range
@@ -1134,7 +1135,7 @@ class TestIndexFns:
         )
         pd.testing.assert_index_equal(
             index_fns.combine_indexes([pd.Index([1]), pd.Index([2, 3])], drop_redundant=True),
-            pd.Int64Index([2, 3], dtype='int64')
+            pd.Index([2, 3], dtype='int64')
         )
         pd.testing.assert_index_equal(
             index_fns.combine_indexes([pd.Index([1], name='i'), pd.Index([2, 3])], drop_redundant=True),
@@ -1152,11 +1153,11 @@ class TestIndexFns:
         )
         pd.testing.assert_index_equal(
             index_fns.combine_indexes([pd.Index([1, 2]), pd.Index([3])], drop_redundant=True),
-            pd.Int64Index([1, 2], dtype='int64')
+            pd.Index([1, 2], dtype='int64')
         )
         pd.testing.assert_index_equal(
             index_fns.combine_indexes([pd.Index([1]), pd.Index([2, 3])], drop_redundant=(False, True)),
-            pd.Int64Index([2, 3], dtype='int64')
+            pd.Index([2, 3], dtype='int64')
         )
         pd.testing.assert_index_equal(
             index_fns.combine_indexes([df2.index, df5.index]),
@@ -1200,10 +1201,10 @@ class TestIndexFns:
             _ = index_fns.drop_levels(multi_i, ['i7', 'i8'])
 
     def test_rename_levels(self):
-        i = pd.Int64Index([1, 2, 3], name='i')
+        i = pd.Index([1, 2, 3], name='i')
         pd.testing.assert_index_equal(
             index_fns.rename_levels(i, {'i': 'f'}),
-            pd.Int64Index([1, 2, 3], dtype='int64', name='f')
+            pd.Index([1, 2, 3], dtype='int64', name='f')
         )
         pd.testing.assert_index_equal(
             index_fns.rename_levels(i, {'a': 'b'}, strict=False),
@@ -1288,7 +1289,7 @@ class TestIndexFns:
         pd.testing.assert_index_equal(
             index_fns.drop_duplicate_levels(pd.MultiIndex.from_arrays(
                 [[1, 2, 3], [1, 2, 3]], names=['a', 'a'])),
-            pd.Int64Index([1, 2, 3], dtype='int64', name='a')
+            pd.Index([1, 2, 3], dtype='int64', name='a')
         )
         pd.testing.assert_index_equal(
             index_fns.drop_duplicate_levels(pd.MultiIndex.from_tuples(
@@ -1573,6 +1574,28 @@ class TestReshapeFns:
                     ], names=['c3', 'c4', 'c5', 'c6'])
                 )
             )
+
+        broadcasted = reshape_fns.broadcast(
+            pd.DataFrame([[1, 2, 3]], columns=pd.Index(['a', 'b', 'c'], name='i1')),
+            pd.DataFrame([[4, 5, 6]], columns=pd.Index(['a', 'b', 'c'], name='i2')),
+            index_from='stack',
+            columns_from='stack',
+            drop_duplicates=True,
+            drop_redundant=True,
+            ignore_sr_names=True
+        )
+        pd.testing.assert_frame_equal(
+            broadcasted[0],
+            pd.DataFrame([[1, 2, 3]], columns=pd.MultiIndex.from_tuples([
+                ('a', 'a'), ('b', 'b'), ('c', 'c')
+            ], names=['i1', 'i2']))
+        )
+        pd.testing.assert_frame_equal(
+            broadcasted[1],
+            pd.DataFrame([[4, 5, 6]], columns=pd.MultiIndex.from_tuples([
+                ('a', 'a'), ('b', 'b'), ('c', 'c')
+            ], names=['i1', 'i2']))
+        )
 
     def test_broadcast_keep(self):
         # 1d
@@ -2205,8 +2228,8 @@ class TestReshapeFns:
                     [1.0, 2.0],
                     [3.0, 4.0]
                 ]),
-                index=pd.Int64Index([1, 2], dtype='int64'),
-                columns=pd.Int64Index([3, 4], dtype='int64')
+                index=pd.Index([1, 2], dtype='int64'),
+                columns=pd.Index([3, 4], dtype='int64')
             )
         )
         pd.testing.assert_frame_equal(
@@ -2236,8 +2259,8 @@ class TestReshapeFns:
                     [1.0, 3.0, np.nan, np.nan],
                     [2.0, 4.0, np.nan, np.nan]
                 ]),
-                index=pd.Int64Index([1, 2, 3, 4], dtype='int64'),
-                columns=pd.Int64Index([1, 2, 3, 4], dtype='int64')
+                index=pd.Index([1, 2, 3, 4], dtype='int64'),
+                columns=pd.Index([1, 2, 3, 4], dtype='int64')
             )
         )
 
@@ -3025,7 +3048,7 @@ class TestAccessors:
             pd.testing.assert_frame_equal(
                 sr2.vbt.apply_and_concat(
                     3, np.array([1, 2, 3]), 10, apply_func=apply_func, d=100,
-                    keys=['a', 'b', 'c'], use_ray=True, ray_shutdown=True
+                    keys=['a', 'b', 'c'], use_ray=True
                 ),
                 target
             )
@@ -3036,7 +3059,7 @@ class TestAccessors:
             pd.DataFrame(
                 target.values,
                 index=target.index,
-                columns=pd.Int64Index([0, 1, 2], dtype='int64', name='apply_idx')
+                columns=pd.Index([0, 1, 2], dtype='int64', name='apply_idx')
             )
         )
 
@@ -3090,7 +3113,7 @@ class TestAccessors:
             pd.testing.assert_frame_equal(
                 df2.vbt.apply_and_concat(
                     3, np.array([1, 2, 3]), 10, apply_func=apply_func, d=100,
-                    keys=['a', 'b', 'c'], use_ray=True, ray_shutdown=True
+                    keys=['a', 'b', 'c'], use_ray=True
                 ),
                 target2
             )
@@ -3244,8 +3267,7 @@ class TestAccessors:
                     [10, df4], 10, b=100,
                     combine_func=combine_func,
                     concat=True,
-                    use_ray=True,
-                    ray_shutdown=True
+                    use_ray=True
                 ),
                 target2
             )

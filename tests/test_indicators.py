@@ -1,20 +1,17 @@
+from collections import namedtuple
+from datetime import datetime
+from itertools import product
+
 import numpy as np
 import pandas as pd
-from numba import njit
-from datetime import datetime
 import pytest
-from itertools import product
-from collections import namedtuple
+from numba import njit
 
 import vectorbt as vbt
 
 ray_available = True
 try:
     import ray
-
-    if ray.is_initialized():
-        ray.shutdown()
-    ray.init()
 except:
     ray_available = False
 
@@ -46,9 +43,13 @@ def setup_module():
     vbt.settings.caching.enabled = False
     vbt.settings.caching.whitelist = []
     vbt.settings.caching.blacklist = []
+    if ray_available:
+        ray.init(local_mode=True, num_cpus=1)
 
 
 def teardown_module():
+    if ray_available:
+        ray.shutdown()
     vbt.settings.reset()
 
 
@@ -155,7 +156,7 @@ class TestFactory:
                 [110., 115.]
             ]),
             index=ts.index,
-            columns=pd.Int64Index([0, 1], dtype='int64', name='custom_p')
+            columns=pd.Index([0, 1], dtype='int64', name='custom_p')
         )
         pd.testing.assert_frame_equal(
             F.from_custom_func(custom_func, var_args=True).run(ts['a'], [0, 1], 10, b=100).out,
@@ -274,7 +275,7 @@ class TestFactory:
                 [110., 115.]
             ]),
             index=ts.index,
-            columns=pd.Int64Index([0, 1], dtype='int64', name='custom_p')
+            columns=pd.Index([0, 1], dtype='int64', name='custom_p')
         )
         pd.testing.assert_frame_equal(
             F.from_apply_func(apply_func, var_args=True).run(ts['a'], [0, 1], 10, b=100).out,
@@ -338,7 +339,7 @@ class TestFactory:
                 F.from_apply_func(apply_func, var_args=True)
                     .run(ts, np.arange(10), 10, b=100).out,
                 F.from_apply_func(apply_func, var_args=True)
-                    .run(ts, np.arange(10), 10, b=100, use_ray=True, ray_shutdown=True).out,
+                    .run(ts, np.arange(10), 10, b=100, use_ray=True).out,
             )
 
     def test_no_inputs(self):
@@ -409,7 +410,7 @@ class TestFactory:
                 [0, 1]
             ]),
             index=pd.RangeIndex(start=0, stop=5, step=1),
-            columns=pd.Int64Index([0, 1], dtype='int64', name='custom_p')
+            columns=pd.Index([0, 1], dtype='int64', name='custom_p')
         )
         pd.testing.assert_frame_equal(
             F.from_apply_func(apply_func, require_input_shape=True).run(5, [0, 1]).out,
@@ -1942,7 +1943,7 @@ class TestFactory:
             obj.out_above([2, 3]),
             target
         )
-        columns = target.columns.rename('my_above', 0)
+        columns = target.columns.set_names('my_above', level=0)
         pd.testing.assert_frame_equal(
             obj.out_above([2, 3], level_name='my_above'),
             pd.DataFrame(
@@ -1952,7 +1953,7 @@ class TestFactory:
             )
         )
         pd.testing.assert_frame_equal(
-            obj.out_above(2, crossover=True),
+            obj.out_crossed_above(2),
             pd.DataFrame(
                 np.array([
                     [False, False, False],
@@ -2013,7 +2014,7 @@ class TestFactory:
             obj.out_and([False, True]),
             target
         )
-        columns = target.columns.rename('my_and', 0)
+        columns = target.columns.set_names('my_and', level=0)
         pd.testing.assert_frame_equal(
             obj.out_and([False, True], level_name='my_and'),
             pd.DataFrame(
@@ -2192,6 +2193,8 @@ class TestFactory:
             'o1',
             'o1_above',
             'o1_below',
+            'o1_crossed_above',
+            'o1_crossed_below',
             'o1_equal',
             'o1_stats',
             'o2',
@@ -2230,6 +2233,8 @@ class TestFactory:
             'ts',
             'ts_above',
             'ts_below',
+            'ts_crossed_above',
+            'ts_crossed_below',
             'ts_equal',
             'ts_stats',
             'tuple_loc',
@@ -2345,7 +2350,7 @@ class TestFactory:
                         ts['a'].rolling(4).mean().values
                     )),
                     index=ts.index,
-                    columns=pd.Int64Index([2, 3, 4], dtype='int64', name='sma_length')
+                    columns=pd.Index([2, 3, 4], dtype='int64', name='sma_length')
                 )
             )
 
@@ -2373,7 +2378,7 @@ class TestFactory:
                         ts['a'].rolling(4).mean().values
                     )),
                     index=ts.index,
-                    columns=pd.Int64Index([2, 3, 4], dtype='int64', name='smaindicator_window')
+                    columns=pd.Index([2, 3, 4], dtype='int64', name='smaindicator_window')
                 )
             )
             target = pd.DataFrame(

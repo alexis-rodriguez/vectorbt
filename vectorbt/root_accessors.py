@@ -17,7 +17,7 @@ vbt.ohlcv.accessors.OHLCVDFAccessor            -> pd.DataFrame.vbt.ohlc.* and pd
 vbt.px_accessors.PXAccessor                    -> pd.DataFrame.vbt.px.*
 ```
 
-Additionally, some accessors subclass other accessors building the following inheritance hiearchy:
+Additionally, some accessors subclass other accessors building the following inheritance hierarchy:
 
 ```plaintext
 vbt.base.accessors.BaseSR/DFAccessor
@@ -35,13 +35,14 @@ So, for example, the method `pd.Series.vbt.to_2d_array` is also available as
 !!! note
     Accessors in vectorbt are not cached, so querying `df.vbt` twice will also call `Vbt_DFAccessor` twice."""
 
-import pandas as pd
-from pandas.core.accessor import DirNamesMixin
 import warnings
 
+import pandas as pd
+from pandas.core.accessor import DirNamesMixin
+
 from vectorbt import _typing as tp
-from vectorbt.utils.config import Configured
 from vectorbt.generic.accessors import GenericSRAccessor, GenericDFAccessor
+from vectorbt.utils.config import Configured
 
 ParentAccessorT = tp.TypeVar("ParentAccessorT", bound=object)
 AccessorT = tp.TypeVar("AccessorT", bound=object)

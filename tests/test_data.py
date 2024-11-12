@@ -1,10 +1,13 @@
+from datetime import datetime, timedelta, timezone
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta, timezone
 import pytest
+import pytz
 
 import vectorbt as vbt
 from vectorbt.utils.config import merge_dicts
+from vectorbt.utils.datetime_ import to_timezone
 
 seed = 42
 
@@ -210,15 +213,15 @@ class TestData:
         )
         index2 = pd.DatetimeIndex(
             [
-                '2020-01-01 02:00:00',
-                '2020-01-02 02:00:00',
-                '2020-01-03 02:00:00',
-                '2020-01-04 02:00:00',
-                '2020-01-05 02:00:00'
+                '2020-01-01 00:00:00',
+                '2020-01-02 00:00:00',
+                '2020-01-03 00:00:00',
+                '2020-01-04 00:00:00',
+                '2020-01-05 00:00:00'
             ],
             freq='D',
-            tz=timezone(timedelta(hours=2))
-        )
+            tz=pytz.utc
+        ).tz_convert(to_timezone('Europe/Berlin'))
         pd.testing.assert_series_equal(
             MyData.download(0, shape=(5,), tz_localize='UTC', tz_convert='Europe/Berlin').data[0],
             pd.Series(
@@ -326,7 +329,7 @@ class TestData:
                     [0.020584494295802447]
                 ],
                 index=index[1:4],
-                columns=pd.Int64Index([1], dtype='int64')
+                columns=pd.Index([1], dtype='int64')
             )
         )
         pd.testing.assert_frame_equal(
@@ -339,7 +342,7 @@ class TestData:
                     [1.020584494295802447]
                 ],
                 index=index[1:4],
-                columns=pd.Int64Index([1], dtype='int64')
+                columns=pd.Index([1], dtype='int64')
             )
         )
         with pytest.raises(Exception):
@@ -458,15 +461,15 @@ class TestData:
         )
         index2 = pd.DatetimeIndex(
             [
-                '2020-01-01 02:00:00',
-                '2020-01-02 02:00:00',
-                '2020-01-03 02:00:00',
-                '2020-01-04 02:00:00',
-                '2020-01-05 02:00:00'
+                '2020-01-01 00:00:00',
+                '2020-01-02 00:00:00',
+                '2020-01-03 00:00:00',
+                '2020-01-04 00:00:00',
+                '2020-01-05 00:00:00'
             ],
             freq='D',
-            tz=timezone(timedelta(hours=2))
-        )
+            tz=pytz.utc
+        ).tz_convert(to_timezone('Europe/Berlin'))
         pd.testing.assert_series_equal(
             MyData.download(0, shape=(5,), tz_localize='UTC', tz_convert='Europe/Berlin')
                 .update(tz_localize=None).data[0],
@@ -676,7 +679,7 @@ class TestData:
                     [0.020584494295802447]
                 ],
                 index=index[1:4],
-                columns=pd.Int64Index([1], dtype='int64')
+                columns=pd.Index([1], dtype='int64')
             )
         )
         pd.testing.assert_frame_equal(
@@ -690,7 +693,7 @@ class TestData:
                     [1.020584494295802447]
                 ],
                 index=index[1:4],
-                columns=pd.Int64Index([1], dtype='int64')
+                columns=pd.Index([1], dtype='int64')
             )
         )
         pd.testing.assert_frame_equal(
@@ -704,7 +707,7 @@ class TestData:
                     [0.020584494295802447]
                 ],
                 index=index[1:4],
-                columns=pd.Int64Index([1], dtype='int64')
+                columns=pd.Index([1], dtype='int64')
             )
         )
         pd.testing.assert_frame_equal(
@@ -718,7 +721,7 @@ class TestData:
                     [1.020584494295802447]
                 ],
                 index=index[1:4],
-                columns=pd.Int64Index([1], dtype='int64')
+                columns=pd.Index([1], dtype='int64')
             )
         )
 
@@ -759,7 +762,7 @@ class TestData:
                     [0.15601864044243652, 1.15601864044243652]
                 ],
                 index=index,
-                columns=pd.Int64Index([0, 1], dtype='int64', name='symbol')
+                columns=pd.Index([0, 1], dtype='int64', name='symbol')
             )
         )
         pd.testing.assert_series_equal(
@@ -815,7 +818,7 @@ class TestData:
                     [0.8324426408004217, 1.8324426408004217]
                 ],
                 index=index,
-                columns=pd.Int64Index([0, 1], dtype='int64', name='symbol')
+                columns=pd.Index([0, 1], dtype='int64', name='symbol')
             )
         )
         pd.testing.assert_frame_equal(
@@ -829,7 +832,7 @@ class TestData:
                     [0.21233911067827616, 1.21233911067827616]
                 ],
                 index=index,
-                columns=pd.Int64Index([0, 1], dtype='int64', name='symbol')
+                columns=pd.Index([0, 1], dtype='int64', name='symbol')
             )
         )
         pd.testing.assert_frame_equal(
@@ -843,7 +846,7 @@ class TestData:
                     [0.18182496720710062, 1.18182496720710062]
                 ],
                 index=index,
-                columns=pd.Int64Index([0, 1], dtype='int64', name='symbol')
+                columns=pd.Index([0, 1], dtype='int64', name='symbol')
             )
         )
 
@@ -912,7 +915,7 @@ class TestData:
                     [0.15601864044243652, 1.15601864044243652]
                 ],
                 index=index,
-                columns=pd.Int64Index([0, 1], dtype='int64', name='symbol')
+                columns=pd.Index([0, 1], dtype='int64', name='symbol')
             )
         )
         pd.testing.assert_frame_equal(
@@ -926,7 +929,7 @@ class TestData:
                     [0.8324426408004217, 1.8324426408004217]
                 ],
                 index=index,
-                columns=pd.Int64Index([0, 1], dtype='int64', name='symbol')
+                columns=pd.Index([0, 1], dtype='int64', name='symbol')
             )
         )
         pd.testing.assert_frame_equal(
@@ -940,7 +943,7 @@ class TestData:
                     [0.8324426408004217, 1.8324426408004217]
                 ],
                 index=index,
-                columns=pd.Int64Index([0, 1], dtype='int64', name='symbol')
+                columns=pd.Index([0, 1], dtype='int64', name='symbol')
             )
         )
         pd.testing.assert_frame_equal(
@@ -954,7 +957,7 @@ class TestData:
                     [0.8324426408004217, 1.8324426408004217]
                 ],
                 index=index,
-                columns=pd.Int64Index([0, 1], dtype='int64', name='symbol')
+                columns=pd.Index([0, 1], dtype='int64', name='symbol')
             )
         )
 
@@ -987,8 +990,8 @@ class TestData:
         pd.testing.assert_series_equal(
             data.stats(),
             pd.Series([
-                pd.Timestamp('2020-01-01 00:00:00+0000', tz='UTC', freq='D'),
-                pd.Timestamp('2020-01-05 00:00:00+0000', tz='UTC', freq='D'),
+                pd.Timestamp('2020-01-01 00:00:00+0000', tz='UTC'),
+                pd.Timestamp('2020-01-05 00:00:00+0000', tz='UTC'),
                 pd.Timedelta('5 days 00:00:00'),
                 2, 2.3333333333333335, 2.3333333333333335
             ],
@@ -999,8 +1002,8 @@ class TestData:
         pd.testing.assert_series_equal(
             data.stats(column='feat0'),
             pd.Series([
-                pd.Timestamp('2020-01-01 00:00:00+0000', tz='UTC', freq='D'),
-                pd.Timestamp('2020-01-05 00:00:00+0000', tz='UTC', freq='D'),
+                pd.Timestamp('2020-01-01 00:00:00+0000', tz='UTC'),
+                pd.Timestamp('2020-01-05 00:00:00+0000', tz='UTC'),
                 pd.Timedelta('5 days 00:00:00'),
                 2, 5, 1
             ],
@@ -1011,8 +1014,8 @@ class TestData:
         pd.testing.assert_series_equal(
             data.stats(group_by=True),
             pd.Series([
-                pd.Timestamp('2020-01-01 00:00:00+0000', tz='UTC', freq='D'),
-                pd.Timestamp('2020-01-05 00:00:00+0000', tz='UTC', freq='D'),
+                pd.Timestamp('2020-01-01 00:00:00+0000', tz='UTC'),
+                pd.Timestamp('2020-01-05 00:00:00+0000', tz='UTC'),
                 pd.Timedelta('5 days 00:00:00'),
                 2, 7, 7
             ],
